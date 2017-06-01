@@ -59,15 +59,36 @@ void VirtualMemoryManager::swapPageIn(int virtAddr)
                 exit(1);
                 return;
         }
+	int table_size = currentThread->space->getNumPages();
 
         FrameInfo * physPageInfo = physicalMemoryInfo + nextVictim;
+	currPageEntry = getPageTableEntry(physPageInfo);       
+	//check for second-chance entries
+	while (!currPageEntry->use){
+	    //erase second-chance bit
+	    currPageEntry->use = false;
+	    //move to next entry
+	    nextVictim=(nextVictim+1)%table_size;
+	    //update physPageInfo
+	    physPageInfo = physicalMemoryInfo + nextVictim;
+	    currPageEntry=getPageTableEntry(physPageInfo);
+
+	}
+	if (currPageEntry->dirty){
+	    //need page start pointer to
+	    char* page_ptr = currPageEntry->physicalPage* PageSize + machine->mainMemory;
+	    writeToSwap(page_ptr, PageSize, currPageEntry->locationOnDisk);
+
+	}
+
         //We assume this page is not occupied by any process space
         physPageInfo->space = currentThread->space;
         physPageInfo->pageTableIndex = virtAddr / PageSize;
         currPageEntry = getPageTableEntry(physPageInfo);
         currPageEntry->physicalPage = memoryManager->getPage();
         loadPageToCurrVictim(virtAddr);
-        nextVictim = nextVictim + 1;
+        //nextVictim = nextVictim + 1;
+        nextVictim=(nextVictim+1)%table_size;
 }
 
 
