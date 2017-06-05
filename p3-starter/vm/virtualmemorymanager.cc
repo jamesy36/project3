@@ -55,52 +55,48 @@ void VirtualMemoryManager::swapPageIn(int virtAddr)
 
     TranslationEntry* currPageEntry;
     
-    int pageTableSize = currentThread->space->getNumPages();
-    bool waiting = true;
+    //int pageTableSize = currentThread->space->getNumPages();
+    /*
 
         if(nextVictim>= NumPhysPages) {//no more space available
                 fprintf(stderr, "Fatal error: No more space available\n");
                 exit(1);
                 return;
         }
-       
-    while(waiting){
+    */
+    
         FrameInfo * physPageInfo = physicalMemoryInfo + nextVictim;
-        if(physPageInfo->space == NULL){
+       
+        if(physPageInfo->space != NULL){
+        TranslationEntry* pageEject = physPageInfo->space->getPageTableEntry(physPageInfo->pageTableIndex);
+       while(pageEject->use){
+        pageEject->use = false;
+        nextVictim = (nextVictim + 1) % NumPhysPages;
+        physPageInfo = physicalMemoryInfo + nextVictim;
+        pageEject = physPageInfo->space->getPageTableEntry(physPageInfo->pageTableIndex);
+        }
+        pageEject->valid = false;
+        if(pageEject->dirty){
+            writeToSwap(machine->mainMemory + (pageEject->physicalPage * PageSize), PageSize, pageEject->locationOnDisk);
+        }
         physPageInfo->space = currentThread->space;
-        physPageInfo->pageTableIndex = virtAddr / PageSize;
+        physPageInfo->pageTableIndex = virtAddr/PageSize;
         currPageEntry = getPageTableEntry(physPageInfo);
-        getPageTableEntry(physPageInfo) -> valid = true;
-        loadPageToCurrVictim(virtAddr);
-        waiting = false;
-        }
-        else{
+        currPageEntry->physicalPage = pageEject->physicalPage;
+    }
+    else{
+        physPageInfo->space = currentThread->space;
+        physPageInfo->pageTableIndex = virtAddr/PageSize;
         currPageEntry = getPageTableEntry(physPageInfo);
-        if(currPageEntry->use){
-            currPageEntry->use = 0;
-        }
-        else{
-            if(currPageEntry->dirty){
-                char* pg = machine->mainMemory + currPageEntry->physicalPage * PageSize;
-                writeToSwap(pg, PageSize, currPageEntry->locationOnDisk);
-                currPageEntry->valid = false;
-                physPageInfo->space = currentThread->space;
-                physPageInfo->pageTableIndex = virtAddr / PageSize;
-                currPageEntry = getPageTableEntry(physPageInfo);
-                getPageTableEntry(physPageInfo) ->valid = true;
-                loadPageToCurrVictim(virtAddr);
-                waiting = false;
-            }
-
-        }
-
-        }
-        nextVictim = (nextVictim + 1) % pageTableSize;
-        
+        currPageEntry->physicalPage = memoryManager->getPage();
+    }
+    loadPageToCurrVictim(virtAddr);
+    nextVictim = (nextVictim + 1)  % NumPhysPages;
     }
 
 
-}
+
+
 
 
 /*
